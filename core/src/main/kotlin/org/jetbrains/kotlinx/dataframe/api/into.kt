@@ -12,6 +12,7 @@ import org.jetbrains.kotlinx.dataframe.columns.FrameColumn
 import org.jetbrains.kotlinx.dataframe.documentation.DocumentationUrls
 import org.jetbrains.kotlinx.dataframe.documentation.RowExpressionsLink
 import org.jetbrains.kotlinx.dataframe.impl.aggregation.internal
+import org.jetbrains.kotlinx.dataframe.impl.aggregation.rowExpressionValue
 import org.jetbrains.kotlinx.dataframe.impl.aggregation.withExpr
 import org.jetbrains.kotlinx.dataframe.impl.columnName
 import org.jetbrains.kotlinx.dataframe.util.DEPRECATED_ACCESS_API
@@ -62,6 +63,8 @@ public fun <T> GroupBy<T, *>.into(column: KProperty<DataFrame<*>>): DataFrame<T>
  * Check out [groupBy Grammar][GroupByDocs.Grammar].
  *
  * See {@include [RowExpressionsLink]}
+ *
+ * @include [RowExpressionReferenceSelectionSnippet]
  *
  * For more information: {@include [DocumentationUrls.GroupBy]}
  *
@@ -132,6 +135,8 @@ public inline fun <T, G, reified V> GroupBy<T, G>.into(
  * this row is both the receiver (`this`) and the argument (`it`) of the expression.
  * See {@include [RowExpressionsLink]}
  *
+ * @include [RowExpressionReferenceSelectionSnippet]
+ *
  * For more information: {@include [DocumentationUrls.GroupByReducing]}
  *
  * Don't confuse this with [into][GroupBy.into] on a [GroupBy], which computes the expression on all rows
@@ -165,7 +170,8 @@ public inline fun <T, G, reified V> ReducedGroupBy<T, G>.into(
     return groupBy.aggregate {
         val row = reducer(it, it)
         if (row != null) {
-            internal().yield(pathOf(name), expression(row, row), type)
+            val (value, valueType) = rowExpressionValue(row, expression, type)
+            internal().yield(pathOf(name), value, valueType)
         }
     }
 }

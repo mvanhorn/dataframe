@@ -596,6 +596,9 @@ A `ReducedGroupBy` can be transformed into a [`DataFrame`](DataFrame.md) using t
 * [`values`](values.md) – to create a [`DataFrame`](DataFrame.md) that contains the values from the reduced rows in the selected columns. 
 * `into` – to add a new [`column`](DataColumn.md) to the resulting [`DataFrame`](DataFrame.md) with values computed with 
 a [`row expression`](DataRow.md#row-expressions) on each row, or a new [`column group`](DataColumn.md) containing each group reduced to a single row.
+The row expression may return a column accessor or a [column path](ColumnSelectors.md#column-resolvers):
+`into` reads that column from the reduced row and keeps the column's declared element type.
+A scalar expression keeps its own result type.
 
 Each method returns a new [`DataFrame`](DataFrame.md) that includes the grouping key columns, containing all unique grouping key values 
 (or value combinations for multiple keys) along with their corresponding reduced rows.
@@ -704,8 +707,12 @@ without preserving grouping keys.
 with the grouping keys and corresponding groups in [FrameColumn](DataColumn.md#framecolumn).
 * `concatWithKeys` — a variant of [`concat`](concat.md) 
 that also includes grouping keys that were not present in the original [`DataFrame`](DataFrame.md).
-* `into` — creates a new [`column`](DataColumn.md) containing a list of values computed with a `RowExpression` for each group, 
+* `into` — creates a new [`column`](DataColumn.md) containing a list of values computed with a [`row expression`](DataRow.md#row-expressions) for each group, 
 or a new [FrameColumn](DataColumn.md#framecolumn) containing the groups themselves.
+The row expression may return a column accessor or a [column path](ColumnSelectors.md#column-resolvers):
+`into` reads that column on every row and keeps the column's declared element type.
+A scalar expression keeps its own result type.
+When rows of a group select different columns, the values share the common type of those columns.
 * [`values`](values.md) — collects all column values for every group without aggregation. 
 For a [ValueColumn](DataColumn.md#valuecolumn) of type `T` it will gather group values into lists of type `List<T>`.
 For a [ColumnGroup](DataColumn.md#columngroup) it will gather group values into a [`DataFrame`](DataFrame.md) 

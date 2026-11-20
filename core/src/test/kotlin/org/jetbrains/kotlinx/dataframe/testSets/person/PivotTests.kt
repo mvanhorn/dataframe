@@ -1,6 +1,8 @@
 package org.jetbrains.kotlinx.dataframe.testSets.person
 
+import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.matchers.shouldBe
+import org.jetbrains.kotlinx.dataframe.DataColumn
 import org.jetbrains.kotlinx.dataframe.DataFrame
 import org.jetbrains.kotlinx.dataframe.annotations.DataSchema
 import org.jetbrains.kotlinx.dataframe.api.Infer
@@ -42,6 +44,7 @@ import org.jetbrains.kotlinx.dataframe.api.mapValues
 import org.jetbrains.kotlinx.dataframe.api.matches
 import org.jetbrains.kotlinx.dataframe.api.named
 import org.jetbrains.kotlinx.dataframe.api.notNull
+import org.jetbrains.kotlinx.dataframe.api.pathOf
 import org.jetbrains.kotlinx.dataframe.api.pivot
 import org.jetbrains.kotlinx.dataframe.api.print
 import org.jetbrains.kotlinx.dataframe.api.remove
@@ -595,5 +598,86 @@ class PivotTests {
             .group { key and value }.into("info")
             .pivot(inward = true) { "info"["value"] }.groupByOther().count()
         pivoted.getColumnGroup("info").getColumnGroup("value").columnsCount() shouldBe typed.value.countDistinct()
+    }
+
+    @Test
+    fun `groupBy into and pivot with keep referenced column type`() {
+        val df = dataFrameOf("k", "i")("a", 123)
+
+        listOf(
+            df.groupBy("k").into("v") { "i"<Int>() },
+            df.groupBy("k").into("v") { column<Int>("i") },
+            df.groupBy("k").into("v") { pathOf("i") },
+        ).forEach {
+            it["v"][0] shouldBe 123
+            it["v"].type() shouldBe typeOf<Int>()
+        }
+
+        listOf(
+            df.pivot("k").with { "i"<Int>() },
+            df.pivot("k").with { column<Int>("i") },
+            df.pivot("k").with { pathOf("i") },
+        ).forEach {
+            it["a"] shouldBe 123
+            it.df()["a"].type() shouldBe typeOf<Int>()
+        }
+    }
+
+    @Test
+    fun `groupBy into and pivot with keep list and reduced reference types`() {
+        val df = dataFrameOf("k", "i")(
+            "a", 123,
+            "a", 456,
+        )
+
+        val grouped = df.groupBy("k").into("v") { column<Int>("i") }
+        grouped["v"][0] shouldBe listOf(123, 456)
+        grouped["v"].type() shouldBe typeOf<List<Int>>()
+
+        val pivoted = df.pivot("k").with { pathOf("i") }
+        pivoted["a"] shouldBe listOf(123, 456)
+        pivoted.df()["a"].type() shouldBe typeOf<List<Int>>()
+
+        val reducedGroup = df.groupBy("k").first().into("v") { column<Int>("i") }
+        reducedGroup["v"][0] shouldBe 123
+        reducedGroup["v"].type() shouldBe typeOf<Int>()
+
+        val reducedPivot = df.pivot("k").first().with { pathOf("i") }
+        reducedPivot["a"] shouldBe 123
+        reducedPivot.df()["a"].type() shouldBe typeOf<Int>()
+
+        val nested = DataColumn.createValueColumn("i", listOf<Int?>(null), typeOf<Int?>())
+        val nestedDf = dataFrameOf(
+            "k" to columnOf("a"),
+            "g" to columnOf("i" to nested),
+        )
+        nestedDf.getColumnGroup("g")["i"].type() shouldBe typeOf<Int?>()
+        val nestedGroup = nestedDf.groupBy("k").into("v") { pathOf("g", "i") }
+        nestedGroup["v"][0] shouldBe null
+        nestedGroup["v"].type() shouldBe typeOf<Int?>()
+
+        val nullable = DataColumn.createValueColumn("b", listOf<Int?>(null, null), typeOf<Int?>())
+        val mixed = dataFrameOf(
+            "k" to columnOf("a", "a"),
+            "a" to columnOf(1, 2),
+            "b" to nullable,
+        )
+        val mixedGroup = mixed.groupBy("k").into("v") {
+            if ("a"<Int>() == 1) column<Int>("a") else column<Int?>("b")
+        }
+        mixedGroup["v"][0] shouldBe listOf(1, null)
+        mixedGroup["v"].type() shouldBe typeOf<List<Int?>>()
+    }
+
+    @Test
+    fun `groupBy into keeps scalar type and reports a missing column`() {
+        val df = dataFrameOf("k", "i")("a", 123)
+        val grouped = df.groupBy("k").into("v") { "i"<Int>() as Number }
+        grouped["v"][0] shouldBe 123
+        grouped["v"].type() shouldBe typeOf<Number>()
+
+        shouldThrow<IllegalArgumentException> {
+            df.groupBy("k").into("v") { pathOf("missing") }
+        }.message shouldBe "Column not found: '[missing]'"
     }
 }

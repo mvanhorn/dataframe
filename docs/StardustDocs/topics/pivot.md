@@ -443,6 +443,9 @@ To perform this transformation, use one of the following functions:
 * [`values`](values.md) — creates a new [`DataRow`](DataRow.md) containing the values from the reduced rows in the selected columns;
 * `with` — computes a new value for each reduced row using a [`row expression`](DataRow.md#row-expressions) 
 and produces a [`DataRow`](DataRow.md) containing these computed values.
+The row expression may return a column accessor or a [column path](ColumnSelectors.md#column-resolvers):
+`with` reads that column from the reduced row and keeps the column's declared element type.
+A scalar expression keeps its own result type.
 
 Each of these functions returns a new [`DataRow`](DataRow.md) with [`Pivot`](pivot.md) keys as top-level columns (or as [`column groups`](DataColumn.md#columngroup)) 
 and values composed of the reduced results from each group.
@@ -510,6 +513,10 @@ The following aggregation methods are available:
 across all rows of each group:
   * values of `DataRow<T>` are collected into `DataFrame<T>`, the resulting column is `FrameColumn<T>`;
   * values of other types `R` are collected into `List<R>`, the resulting column is `DataColumn<List<R>>`;
+  * a column accessor or a [column path](ColumnSelectors.md#column-resolvers) selects that column.
+  The result contains the referenced cells and uses the column's declared element type.
+  A scalar expression keeps its own result type.
+  When rows of a group select different columns, the values share the common type of those columns.
 * `aggregate` — performs a set of custom aggregations using `AggregateDsl`, allowing computation of one or more derived values per group; 
 * various [`aggregation statistics`](pivot.md#aggregation-statistics).
 

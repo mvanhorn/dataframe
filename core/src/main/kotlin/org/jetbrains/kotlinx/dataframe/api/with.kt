@@ -1,6 +1,5 @@
 package org.jetbrains.kotlinx.dataframe.api
 
-import org.jetbrains.kotlinx.dataframe.AnyColumnReference
 import org.jetbrains.kotlinx.dataframe.DataFrame
 import org.jetbrains.kotlinx.dataframe.DataRow
 import org.jetbrains.kotlinx.dataframe.RowExpression
@@ -8,6 +7,7 @@ import org.jetbrains.kotlinx.dataframe.documentation.DocumentationUrls
 import org.jetbrains.kotlinx.dataframe.documentation.ExcludeFromSources
 import org.jetbrains.kotlinx.dataframe.documentation.RowExpressionsLink
 import org.jetbrains.kotlinx.dataframe.impl.aggregation.internal
+import org.jetbrains.kotlinx.dataframe.impl.aggregation.rowExpressionValue
 import org.jetbrains.kotlinx.dataframe.impl.aggregation.withExpr
 import org.jetbrains.kotlinx.dataframe.impl.emptyPath
 import kotlin.reflect.typeOf
@@ -28,6 +28,16 @@ private typealias PivotWithOneOrManyResultSnippet = Nothing
 @ExcludeFromSources
 private typealias PivotWithReducedResultSnippet = Nothing
 
+/**
+ * When [expression] returns a column accessor, a column path, or another column reference,
+ * the reference is resolved against that row. The result contains the referenced cell and is typed
+ * with that column's declared element type.
+ * Rows that select different columns share the common type of those columns.
+ * A scalar result keeps the declared type of [expression].
+ */
+@ExcludeFromSources
+internal typealias RowExpressionReferenceSelectionSnippet = Nothing
+
 // endregion
 
 // region Pivot
@@ -36,6 +46,8 @@ private typealias PivotWithReducedResultSnippet = Nothing
  * Aggregates this [Pivot] by evaluating the given [row expression][expression] on every row of each pivot group.
  *
  * @include [PivotWithOneOrManyResultSnippet]
+ *
+ * @include [RowExpressionReferenceSelectionSnippet]
  *
  * For more information: {@include [DocumentationUrls.Pivot]}
  *
@@ -46,7 +58,7 @@ private typealias PivotWithReducedResultSnippet = Nothing
  * @sample [org.jetbrains.kotlinx.dataframe.samples.api.PivotSamples.withOnPivot_properties]
  * @sample [org.jetbrains.kotlinx.dataframe.samples.api.PivotSamples.withOnPivot_strings]
  *
- * @param [V] The result type of [expression], captured at runtime for constructing the result columns.
+ * @param [V] The type of a scalar [expression] result, captured at runtime.
  * @param [expression] The expression evaluated for each row within each pivot group.
  * @return A new [DataRow] with pivot keys as columns or column groups containing the computed results.
  */
@@ -69,6 +81,8 @@ public inline fun <T, reified V> Pivot<T>.with(noinline expression: RowExpressio
  * [expression] is a [RowExpression] computed only on the single reduced row of each group;
  * this row is both the receiver and the argument (`it`) of the expression.
  * See {@include [RowExpressionsLink]}
+ *
+ * @include [RowExpressionReferenceSelectionSnippet]
  *
  * For more information: {@include [DocumentationUrls.PivotReducing]}
  *
@@ -104,13 +118,15 @@ public inline fun <T, reified V> ReducedPivot<T>.with(noinline expression: RowEx
  *
  * @include [PivotWithOneOrManyResultSnippet]
  *
+ * @include [RowExpressionReferenceSelectionSnippet]
+ *
  * For more information: {@include [DocumentationUrls.Pivot]}
  *
  * ### Examples
  *
  * @sample [org.jetbrains.kotlinx.dataframe.samples.api.PivotSamples.withOnPivotGroupBy]
  *
- * @param [V] The result type of [expression], captured at runtime for constructing the result columns.
+ * @param [V] The type of a scalar [expression] result, captured at runtime.
  * @param [expression] The expression evaluated for each row within each pivot cell group.
  * @return A new [DataFrame] with the grouping key columns, one row per grouping key combination,
  * and pivot keys as columns or column groups containing the computed results.
@@ -130,6 +146,8 @@ public inline fun <T, reified V> PivotGroupBy<T>.with(noinline expression: RowEx
  *
  * @include [PivotWithReducedResultSnippet]
  *
+ * @include [RowExpressionReferenceSelectionSnippet]
+ *
  * For more information: {@include [DocumentationUrls.Pivot]}
  *
  * ### Examples
@@ -144,15 +162,13 @@ public inline fun <T, reified V> PivotGroupBy<T>.with(noinline expression: RowEx
 public inline fun <T, reified V> ReducedPivotGroupBy<T>.with(noinline expression: RowExpression<T, V>): DataFrame<T> {
     val type = typeOf<V>()
     return pivot.aggregate {
-        val value = reducer(this)?.let {
-            val value = expression(it, it)
-            if (value is AnyColumnReference) {
-                value.getValue(it)
-            } else {
-                value
-            }
+        val row = reducer(this)
+        val (value, valueType) = if (row == null) {
+            null to type
+        } else {
+            rowExpressionValue(row, expression, type)
         }
-        internal().yield(emptyPath(), value, type)
+        internal().yield(emptyPath(), value, valueType)
     }
 }
 
